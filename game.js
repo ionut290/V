@@ -33,7 +33,11 @@ const COLLEAGUE_NAMES = [
   'Ajmal Muhammad', 'Minelli Lorenza', 'Basciu Alessandro', 'Gerardi Valentina', 'Frighi Andrea',
 ];
 
-const OBSTACLES = ['rovi giganti', 'fango', 'zanzare', 'caldo', 'pioggia', 'trattori impazziti'];
+const OBSTACLES = [
+  'rovi giganti', 'fango', 'zanzare', 'caldo', 'pioggia', 'trattori impazziti',
+  'carrelli ribelli', 'pallet ballerini', 'pozzanghere traditrici', 'cassette volanti',
+  'galline in sciopero', 'tubi dispettosi',
+];
 const COLLECTIBLES = ['guanti', 'caschi', 'decespugliatori', 'taniche', 'motoseghe'];
 const MISSIONS = [
   'salvare il turno pausa prima che il caffè scappi col carrello',
@@ -144,10 +148,15 @@ class GameScene extends Phaser.Scene {
   }
   update() {
     if (this.ended) { if (Phaser.Input.Keyboard.JustDown(this.enterKey)) this.scene.start('LevelSelectScene'); return; }
-    const left = this.cursors.left.isDown || this.wasd.A.isDown; const right = this.cursors.right.isDown || this.wasd.D.isDown;
+    const left = this.cursors.left.isDown || this.wasd.A.isDown || this.touchLeft; const right = this.cursors.right.isDown || this.wasd.D.isDown || this.touchRight;
     this.player.setVelocityX(left ? -230 : right ? 230 : 0); if (left || right) this.player.setFlipX(left);
     if ((Phaser.Input.Keyboard.JustDown(this.cursors.up) || Phaser.Input.Keyboard.JustDown(this.cursors.space) || Phaser.Input.Keyboard.JustDown(this.wasd.W)) && this.player.body.blocked.down) this.player.setVelocityY(-470);
-    this.hazards.children.iterate((h) => { if (!h) return; if (h.body.blocked.left) h.setVelocityX(90); if (h.body.blocked.right) h.setVelocityX(-90); });
+    this.hazards.children.iterate((h) => {
+      if (!h) return;
+      const speed = h.getData('speed') || 90;
+      if (h.body.blocked.left) h.setVelocityX(speed);
+      if (h.body.blocked.right) h.setVelocityX(-speed);
+    });
     if (this.player.y > GAME_HEIGHT + 80) this.loseLife();
   }
   addWorld() {
@@ -166,7 +175,22 @@ class GameScene extends Phaser.Scene {
   }
   createHazards() {
     this.hazards = this.physics.add.group();
-    [520,1080,1660,2160].forEach((x, i) => { const h = this.hazards.create(x, 100, `hazard${(this.level.obstacleOffset + i) % OBSTACLES.length}`); h.setVelocityX(i % 2 ? -90 : 90).setBounce(1, 0).setData('name', OBSTACLES[(this.level.obstacleOffset + i) % OBSTACLES.length]); h.body.setSize(34, 30).setOffset(3, 8); });
+    const hazardSpots = [
+      [420, 100], [680, 255], [960, 100], [1180, 340], [1420, 100], [1660, 185],
+      [1840, 100], [2040, 250], [2220, 100], [2380, 385], [2440, 100], [2480, 335],
+    ];
+    const hazardCount = Math.min(hazardSpots.length, 4 + Math.floor(this.level.id / 4));
+    hazardSpots.slice(0, hazardCount).forEach(([x, y], i) => {
+      const obstacleIndex = (this.level.obstacleOffset + i) % OBSTACLES.length;
+      const speed = 75 + (i % 4) * 18 + Math.min(45, Math.floor(this.level.id / 8) * 6);
+      const direction = i % 2 ? -1 : 1;
+      const h = this.hazards.create(x, y + (i % 3) * 8, `hazard${obstacleIndex}`);
+      h.setVelocityX(speed * direction)
+        .setBounce(1, 0)
+        .setData('name', OBSTACLES[obstacleIndex])
+        .setData('speed', speed);
+      h.body.setSize(34, 30).setOffset(3, 8);
+    });
   }
   createBoss() { this.boss = this.physics.add.sprite(2380, 380, 'boss').setTint(this.level.tint).setBounce(1, 0).setVelocityX(-70); this.boss.body.setSize(54, 54).setOffset(5, 8); }
   createHud() {
@@ -176,7 +200,21 @@ class GameScene extends Phaser.Scene {
     this.infoText = this.add.text(480, 40, `Missione: ${this.level.mission}`, textStyle(15, '#e7ffe4')).setOrigin(.5,0).setScrollFactor(0).setWordWrapWidth(700).setAlign('center');
     this.add.text(480, 72, this.level.joke, textStyle(14, '#fff4a8')).setOrigin(.5,0).setScrollFactor(0).setWordWrapWidth(760).setAlign('center');
   }
-  createControls() { this.cursors = this.input.keyboard.createCursorKeys(); this.wasd = this.input.keyboard.addKeys('W,A,S,D'); this.enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER); }
+  createControls() {
+    this.cursors = this.input.keyboard.createCursorKeys(); this.wasd = this.input.keyboard.addKeys('W,A,S,D'); this.enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+    this.touchLeft = false; this.touchRight = false; this.touchJump = false;
+    this.addTouchButton(78, 462, '◀', (pressed) => { this.touchLeft = pressed; });
+    this.addTouchButton(168, 462, '▶', (pressed) => { this.touchRight = pressed; });
+    this.addTouchButton(866, 448, '⤒', (pressed) => { this.touchJump = pressed; }, 82);
+  }
+  addTouchButton(x, y, label, setPressed, size = 72) {
+    const rect = this.add.rectangle(x, y, size, size, 0x08111f, .48).setScrollFactor(0).setStrokeStyle(3, 0xffffff, .65).setInteractive({ useHandCursor: true });
+    const text = this.add.text(x, y, label, textStyle(38, '#ffffff')).setOrigin(.5).setScrollFactor(0);
+    rect.on('pointerdown', () => setPressed(true));
+    rect.on('pointerup', () => setPressed(false));
+    rect.on('pointerout', () => setPressed(false));
+    return { rect, text };
+  }
   createCollisions() {
     this.physics.add.collider(this.player, this.platforms); this.physics.add.collider(this.hazards, this.platforms); this.physics.add.collider(this.boss, this.platforms);
     this.physics.add.overlap(this.player, this.items, this.collectItem, null, this); this.physics.add.overlap(this.player, this.hazards, this.hitHazard, null, this); this.physics.add.overlap(this.player, this.boss, this.hitBoss, null, this);
@@ -199,7 +237,6 @@ class GameScene extends Phaser.Scene {
     if (this.itemsLeft > 0) { this.infoText.setText(`Prima raccogli tutti gli oggetti: il mini boss ${this.level.boss} è allergico all’organizzazione.`); return; }
     if (player.body.velocity.y > 80 && player.y < boss.y - 12) { this.bossHits += 1; player.setVelocityY(-310); run.score += 50; this.scoreText.setText(`Punti: ${run.score}`); this.infoText.setText(`${this.level.boss} colpito ${this.bossHits}/3: protesta in dialetto dei rovi!`); this.showFloatingJoke('PATATRAC!', boss.x, boss.y - 36); if (this.bossHits >= 3) this.win(); } else this.loseLife(`${this.level.boss} ti ha timbrato il cartellino al contrario!`);
   }
-  loseLife(message = 'Ionel inciampa ma salva la dignità con un salto comico.') { if (this.invulnerable || this.ended) return; run.lives -= 1; this.livesText.setText(`Vite: ${run.lives}`); if (run.lives <= 0) { this.finish('Game Over', message, false); return; } this.invulnerable = true; this.infoText.setText(message); this.player.setPosition(Math.max(85, this.player.x - 180), 250); this.player.setVelocity(0,0); this.tweens.add({ targets: this.player, alpha: .35, yoyo: true, repeat: 7, duration: 110, onComplete: () => { this.player.setAlpha(1); this.invulnerable = false; } }); }
   win() { save.complete(this.level.id, run.score); this.finish('Vittoria!', this.level.victory, true); }
   finish(title, message, won) { this.ended = true; this.physics.pause(); this.add.rectangle(GAME_WIDTH/2, GAME_HEIGHT/2, 650, 250, 0x08111f, .92).setScrollFactor(0).setStrokeStyle(4, won ? 0xfff4a8 : 0xff6b6b); this.add.text(480, 210, title, titleStyle(44)).setOrigin(.5).setScrollFactor(0); this.add.text(480, 268, message, textStyle(20, '#ffffff')).setOrigin(.5).setScrollFactor(0).setWordWrapWidth(570).setAlign('center'); this.add.text(480, 334, `Punteggio: ${run.score} • Premi Invio per la selezione livelli`, textStyle(18, '#7de6ff')).setOrigin(.5).setScrollFactor(0); }
 }
@@ -209,7 +246,7 @@ function createTextures(scene) {
   g.fillStyle(0x4b7bec).fillRoundedRect(6, 10, 34, 38, 10).fillStyle(0xffd29d).fillCircle(23, 11, 11).fillStyle(0x1f2937).fillRect(13, 0, 20, 7).fillStyle(0xffffff).fillCircle(19, 10, 2).fillCircle(27, 10, 2).generateTexture('ionel', 48, 54); g.clear();
   g.fillStyle(0x6ebf58).fillRoundedRect(0,0,220,32,10).fillStyle(0x3d7835).fillRect(0,22,220,10).generateTexture('platform',220,32); g.clear();
   const colors = [0x2ecc71,0xffd166,0x7bdff2,0xd99a6c,0xb5651d]; for (let i=0;i<5;i+=1){ g.fillStyle(colors[i]).fillRoundedRect(3,3,34,24,8).fillStyle(0xffffff,.5).fillCircle(28,10,5).generateTexture(`item${i}`,40,32); g.clear(); }
-  const hColors = [0x7b2d26,0x6b4f2a,0x8e44ad,0xff9f1c,0x3498db,0xe74c3c]; for (let i=0;i<6;i+=1){ g.fillStyle(hColors[i]).fillCircle(20,20,16).fillStyle(0xffffff).fillCircle(14,16,3).fillCircle(25,16,3).fillStyle(0x111111).fillTriangle(12,27,28,27,20,34).generateTexture(`hazard${i}`,40,40); g.clear(); }
+  const hColors = [0x7b2d26,0x6b4f2a,0x8e44ad,0xff9f1c,0x3498db,0xe74c3c,0xf97316,0x22c55e,0x38bdf8,0xa855f7,0xfacc15,0x94a3b8]; for (let i=0;i<OBSTACLES.length;i+=1){ g.fillStyle(hColors[i % hColors.length]).fillCircle(20,20,16).fillStyle(0xffffff).fillCircle(14,16,3).fillCircle(25,16,3).fillStyle(0x111111).fillTriangle(12,27,28,27,20,34).generateTexture(`hazard${i}`,40,40); g.clear(); }
   g.fillStyle(0xf06292).fillRoundedRect(0,8,64,56,16).fillStyle(0xffffff).fillCircle(20,26,5).fillCircle(44,26,5).fillStyle(0x111111).fillRect(18,43,28,5).generateTexture('boss',64,72);
 }
 function paintBackdrop(scene, color) { scene.add.rectangle(480,270,960,540,color); for (let i=0;i<55;i+=1) scene.add.circle(Phaser.Math.Between(0,960), Phaser.Math.Between(0,540), Phaser.Math.Between(1,4), 0xffffff, .18); }
