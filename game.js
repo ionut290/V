@@ -140,7 +140,7 @@ class GameScene extends Phaser.Scene {
     this.player.setVelocityX(left ? -230 : right ? 230 : 0); if (left || right) this.player.setFlipX(left);
     if ((Phaser.Input.Keyboard.JustDown(this.cursors.up) || Phaser.Input.Keyboard.JustDown(this.cursors.space) || Phaser.Input.Keyboard.JustDown(this.wasd.W) || this.touchJump) && this.player.body.blocked.down) this.player.setVelocityY(-470);
     this.hazards.children.iterate((h) => { if (!h) return; if (h.body.blocked.left) h.setVelocityX(90); if (h.body.blocked.right) h.setVelocityX(-90); });
-    if (this.player.y > GAME_HEIGHT + 80) this.loseLife();
+    if (this.player.y > GAME_HEIGHT + 80) this.loseLife('Ionel è caduto nel buco della pausa caffè: una vita in meno!');
   }
   addWorld() {
     for (let x = 0; x < WORLD_WIDTH; x += 120) this.add.rectangle(x, 510, 100, 70, 0x4d7d35).setOrigin(0, 0);
@@ -216,8 +216,33 @@ class GameScene extends Phaser.Scene {
     }
     this.loseLife(`${this.level.boss} ti ha timbrato il cartellino al contrario!`);
   }
-  loseLife(message = 'Ionel inciampa ma salva la dignità con un salto comico.') { if (this.invulnerable || this.ended) return; run.lives -= 1; this.livesText.setText(`Vite: ${run.lives}`); if (run.lives <= 0) { this.finish('Game Over', message, false); return; } this.invulnerable = true; this.infoText.setText(message); this.player.setPosition(Math.max(85, this.player.x - 180), 250); this.player.setVelocity(0,0); this.tweens.add({ targets: this.player, alpha: .35, yoyo: true, repeat: 7, duration: 110, onComplete: () => { this.player.setAlpha(1); this.invulnerable = false; } }); }
-  win(message = this.level.victory) { save.complete(this.level.id, run.score); this.finish('Vittoria!', message, true); }
+  loseLife(message = 'Ionel inciampa ma salva la dignità con un salto comico.') {
+    if (this.invulnerable || this.ended) return;
+    const isFall = message.includes('caduto nel buco');
+    this.invulnerable = true;
+    run.lives -= 1;
+    this.livesText.setText(`Vite: ${run.lives}`);
+    if (run.lives <= 0) { this.finish('Game Over', message, false); return; }
+    this.infoText.setText(message);
+
+    const respawnPlayer = () => {
+      this.player.setPosition(Math.max(85, this.player.x - 180), 250);
+      this.player.setVelocity(0,0);
+      this.player.setAngle(0);
+      this.tweens.add({ targets: this.player, alpha: .35, yoyo: true, repeat: 7, duration: 110, onComplete: () => { this.player.setAlpha(1); this.invulnerable = false; } });
+    };
+
+    if (isFall) {
+      const patatrac = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 70, 'PATATRAC!', titleStyle(42)).setOrigin(.5).setScrollFactor(0).setDepth(1000);
+      this.tweens.add({ targets: patatrac, scale: 1.18, angle: -5, alpha: .15, yoyo: true, duration: 260, onComplete: () => patatrac.destroy() });
+      this.player.setVelocity(0, -220);
+      this.tweens.add({ targets: this.player, angle: 18, y: this.player.y - 40, yoyo: true, duration: 220, onComplete: respawnPlayer });
+      return;
+    }
+
+    respawnPlayer();
+  }
+  win() { save.complete(this.level.id, run.score); this.finish('Vittoria!', this.level.victory, true); }
   finish(title, message, won) { this.ended = true; this.physics.pause(); this.add.rectangle(GAME_WIDTH/2, GAME_HEIGHT/2, 650, 250, 0x08111f, .92).setScrollFactor(0).setStrokeStyle(4, won ? 0xfff4a8 : 0xff6b6b); this.add.text(480, 210, title, titleStyle(44)).setOrigin(.5).setScrollFactor(0); this.add.text(480, 268, message, textStyle(20, '#ffffff')).setOrigin(.5).setScrollFactor(0).setWordWrapWidth(570).setAlign('center'); this.add.text(480, 334, `Punteggio: ${run.score} • Premi Invio per la selezione livelli`, textStyle(18, '#7de6ff')).setOrigin(.5).setScrollFactor(0); }
 }
 
