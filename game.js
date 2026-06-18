@@ -33,7 +33,11 @@ const COLLEAGUE_NAMES = [
   'Ajmal Muhammad', 'Minelli Lorenza', 'Basciu Alessandro', 'Gerardi Valentina', 'Frighi Andrea',
 ];
 
-const OBSTACLES = ['rovi giganti', 'fango', 'zanzare', 'caldo', 'pioggia', 'trattori impazziti'];
+const OBSTACLES = [
+  'rovi giganti', 'fango', 'zanzare', 'caldo', 'pioggia', 'trattori impazziti',
+  'carrelli ribelli', 'pallet ballerini', 'pozzanghere traditrici', 'cassette volanti',
+  'galline in sciopero', 'tubi dispettosi',
+];
 const COLLECTIBLES = ['guanti', 'caschi', 'decespugliatori', 'taniche', 'motoseghe'];
 const MISSIONS = [
   'salvare il turno pausa prima che il caffè scappi col carrello',
@@ -138,9 +142,14 @@ class GameScene extends Phaser.Scene {
     if (this.ended) { if (Phaser.Input.Keyboard.JustDown(this.enterKey)) this.scene.start('LevelSelectScene'); return; }
     const left = this.cursors.left.isDown || this.wasd.A.isDown || this.touchLeft; const right = this.cursors.right.isDown || this.wasd.D.isDown || this.touchRight;
     this.player.setVelocityX(left ? -230 : right ? 230 : 0); if (left || right) this.player.setFlipX(left);
-    if ((Phaser.Input.Keyboard.JustDown(this.cursors.up) || Phaser.Input.Keyboard.JustDown(this.cursors.space) || Phaser.Input.Keyboard.JustDown(this.wasd.W) || this.touchJump) && this.player.body.blocked.down) this.player.setVelocityY(-470);
-    this.hazards.children.iterate((h) => { if (!h) return; if (h.body.blocked.left) h.setVelocityX(90); if (h.body.blocked.right) h.setVelocityX(-90); });
-    if (this.player.y > GAME_HEIGHT + 80) this.loseLife('Ionel è caduto nel buco della pausa caffè: una vita in meno!');
+    if ((Phaser.Input.Keyboard.JustDown(this.cursors.up) || Phaser.Input.Keyboard.JustDown(this.cursors.space) || Phaser.Input.Keyboard.JustDown(this.wasd.W)) && this.player.body.blocked.down) this.player.setVelocityY(-470);
+    this.hazards.children.iterate((h) => {
+      if (!h) return;
+      const speed = h.getData('speed') || 90;
+      if (h.body.blocked.left) h.setVelocityX(speed);
+      if (h.body.blocked.right) h.setVelocityX(-speed);
+    });
+    if (this.player.y > GAME_HEIGHT + 80) this.loseLife();
   }
   addWorld() {
     for (let x = 0; x < WORLD_WIDTH; x += 120) this.add.rectangle(x, 510, 100, 70, 0x4d7d35).setOrigin(0, 0);
@@ -158,7 +167,22 @@ class GameScene extends Phaser.Scene {
   }
   createHazards() {
     this.hazards = this.physics.add.group();
-    [520,1080,1660,2160].forEach((x, i) => { const h = this.hazards.create(x, 100, `hazard${(this.level.obstacleOffset + i) % OBSTACLES.length}`); h.setVelocityX(i % 2 ? -90 : 90).setBounce(1, 0).setData('name', OBSTACLES[(this.level.obstacleOffset + i) % OBSTACLES.length]); h.body.setSize(34, 30).setOffset(3, 8); });
+    const hazardSpots = [
+      [420, 100], [680, 255], [960, 100], [1180, 340], [1420, 100], [1660, 185],
+      [1840, 100], [2040, 250], [2220, 100], [2380, 385], [2440, 100], [2480, 335],
+    ];
+    const hazardCount = Math.min(hazardSpots.length, 4 + Math.floor(this.level.id / 4));
+    hazardSpots.slice(0, hazardCount).forEach(([x, y], i) => {
+      const obstacleIndex = (this.level.obstacleOffset + i) % OBSTACLES.length;
+      const speed = 75 + (i % 4) * 18 + Math.min(45, Math.floor(this.level.id / 8) * 6);
+      const direction = i % 2 ? -1 : 1;
+      const h = this.hazards.create(x, y + (i % 3) * 8, `hazard${obstacleIndex}`);
+      h.setVelocityX(speed * direction)
+        .setBounce(1, 0)
+        .setData('name', OBSTACLES[obstacleIndex])
+        .setData('speed', speed);
+      h.body.setSize(34, 30).setOffset(3, 8);
+    });
   }
   createBoss() { this.boss = this.physics.add.sprite(2380, 380, 'boss').setTint(this.level.tint).setBounce(1, 0).setVelocityX(-70); this.boss.body.setSize(54, 54).setOffset(5, 8); }
   createHud() {
@@ -251,7 +275,7 @@ function createTextures(scene) {
   g.fillStyle(0x4b7bec).fillRoundedRect(6, 10, 34, 38, 10).fillStyle(0xffd29d).fillCircle(23, 11, 11).fillStyle(0x1f2937).fillRect(13, 0, 20, 7).fillStyle(0xffffff).fillCircle(19, 10, 2).fillCircle(27, 10, 2).generateTexture('ionel', 48, 54); g.clear();
   g.fillStyle(0x6ebf58).fillRoundedRect(0,0,220,32,10).fillStyle(0x3d7835).fillRect(0,22,220,10).generateTexture('platform',220,32); g.clear();
   const colors = [0x2ecc71,0xffd166,0x7bdff2,0xd99a6c,0xb5651d]; for (let i=0;i<5;i+=1){ g.fillStyle(colors[i]).fillRoundedRect(3,3,34,24,8).fillStyle(0xffffff,.5).fillCircle(28,10,5).generateTexture(`item${i}`,40,32); g.clear(); }
-  const hColors = [0x7b2d26,0x6b4f2a,0x8e44ad,0xff9f1c,0x3498db,0xe74c3c]; for (let i=0;i<6;i+=1){ g.fillStyle(hColors[i]).fillCircle(20,20,16).fillStyle(0xffffff).fillCircle(14,16,3).fillCircle(25,16,3).fillStyle(0x111111).fillTriangle(12,27,28,27,20,34).generateTexture(`hazard${i}`,40,40); g.clear(); }
+  const hColors = [0x7b2d26,0x6b4f2a,0x8e44ad,0xff9f1c,0x3498db,0xe74c3c,0xf97316,0x22c55e,0x38bdf8,0xa855f7,0xfacc15,0x94a3b8]; for (let i=0;i<OBSTACLES.length;i+=1){ g.fillStyle(hColors[i % hColors.length]).fillCircle(20,20,16).fillStyle(0xffffff).fillCircle(14,16,3).fillCircle(25,16,3).fillStyle(0x111111).fillTriangle(12,27,28,27,20,34).generateTexture(`hazard${i}`,40,40); g.clear(); }
   g.fillStyle(0xf06292).fillRoundedRect(0,8,64,56,16).fillStyle(0xffffff).fillCircle(20,26,5).fillCircle(44,26,5).fillStyle(0x111111).fillRect(18,43,28,5).generateTexture('boss',64,72);
 }
 function paintBackdrop(scene, color) { scene.add.rectangle(480,270,960,540,color); for (let i=0;i<55;i+=1) scene.add.circle(Phaser.Math.Between(0,960), Phaser.Math.Between(0,540), Phaser.Math.Between(1,4), 0xffffff, .18); }
