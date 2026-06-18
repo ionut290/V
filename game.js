@@ -140,7 +140,7 @@ class GameScene extends Phaser.Scene {
   }
   update() {
     if (this.ended) { if (Phaser.Input.Keyboard.JustDown(this.enterKey)) this.scene.start('LevelSelectScene'); return; }
-    const left = this.cursors.left.isDown || this.wasd.A.isDown; const right = this.cursors.right.isDown || this.wasd.D.isDown;
+    const left = this.cursors.left.isDown || this.wasd.A.isDown || this.touchLeft; const right = this.cursors.right.isDown || this.wasd.D.isDown || this.touchRight;
     this.player.setVelocityX(left ? -230 : right ? 230 : 0); if (left || right) this.player.setFlipX(left);
     if ((Phaser.Input.Keyboard.JustDown(this.cursors.up) || Phaser.Input.Keyboard.JustDown(this.cursors.space) || Phaser.Input.Keyboard.JustDown(this.wasd.W)) && this.player.body.blocked.down) this.player.setVelocityY(-470);
     this.hazards.children.iterate((h) => {
@@ -192,18 +192,80 @@ class GameScene extends Phaser.Scene {
     this.infoText = this.add.text(480, 40, `Missione: ${this.level.mission}`, textStyle(15, '#e7ffe4')).setOrigin(.5,0).setScrollFactor(0).setWordWrapWidth(700).setAlign('center');
     this.add.text(480, 72, this.level.joke, textStyle(14, '#fff4a8')).setOrigin(.5,0).setScrollFactor(0).setWordWrapWidth(760).setAlign('center');
   }
-  createControls() { this.cursors = this.input.keyboard.createCursorKeys(); this.wasd = this.input.keyboard.addKeys('W,A,S,D'); this.enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER); }
+  createControls() {
+    this.cursors = this.input.keyboard.createCursorKeys(); this.wasd = this.input.keyboard.addKeys('W,A,S,D'); this.enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+    this.touchLeft = false; this.touchRight = false; this.touchJump = false;
+    this.addTouchButton(78, 462, '◀', (pressed) => { this.touchLeft = pressed; });
+    this.addTouchButton(168, 462, '▶', (pressed) => { this.touchRight = pressed; });
+    this.addTouchButton(866, 448, '⤒', (pressed) => { this.touchJump = pressed; }, 82);
+  }
+  addTouchButton(x, y, label, setPressed, size = 72) {
+    const rect = this.add.rectangle(x, y, size, size, 0x08111f, .48).setScrollFactor(0).setStrokeStyle(3, 0xffffff, .65).setInteractive({ useHandCursor: true });
+    const text = this.add.text(x, y, label, textStyle(38, '#ffffff')).setOrigin(.5).setScrollFactor(0);
+    rect.on('pointerdown', () => setPressed(true));
+    rect.on('pointerup', () => setPressed(false));
+    rect.on('pointerout', () => setPressed(false));
+    return { rect, text };
+  }
   createCollisions() {
     this.physics.add.collider(this.player, this.platforms); this.physics.add.collider(this.hazards, this.platforms); this.physics.add.collider(this.boss, this.platforms);
     this.physics.add.overlap(this.player, this.items, this.collectItem, null, this); this.physics.add.overlap(this.player, this.hazards, this.hitHazard, null, this); this.physics.add.overlap(this.player, this.boss, this.hitBoss, null, this);
   }
-  collectItem(player, item) { item.disableBody(true, true); this.itemsLeft -= 1; run.score += 10; this.scoreText.setText(`Punti: ${run.score}`); this.infoText.setText(`Raccolto: ${item.getData('label')}! Mancano ${this.itemsLeft} oggetti prima del mini boss.`); }
+  collectItem(player, item) {
+    item.disableBody(true, true);
+    this.itemsLeft -= 1;
+    run.score += 10;
+    this.scoreText.setText(`Punti: ${run.score}`);
+    if (this.itemsLeft <= 0) {
+      this.infoText.setText('Hai raccolto tutto! Si passa al livello successivo!');
+      this.win('Hai raccolto tutto! Si passa al livello successivo!');
+      return;
+    }
+    this.infoText.setText(`Raccolto: ${item.getData('label')}! Restano ${this.itemsLeft} oggetti da raccogliere.`);
+  }
   hitHazard(player, hazard) { if (player.body.velocity.y > 80 && player.y < hazard.y - 8) { hazard.disableBody(true, true); player.setVelocityY(-260); run.score += 25; this.scoreText.setText(`Punti: ${run.score}`); return; } this.loseLife(`${hazard.getData('name')} ti ha fatto fare una pausa non autorizzata!`); }
   hitBoss(player, boss) {
-    if (this.itemsLeft > 0) { this.infoText.setText(`Prima raccogli tutti gli oggetti: il mini boss ${this.level.boss} è allergico all’organizzazione.`); return; }
-    if (player.body.velocity.y > 80 && player.y < boss.y - 12) { this.bossHits += 1; player.setVelocityY(-310); run.score += 50; this.scoreText.setText(`Punti: ${run.score}`); this.infoText.setText(`${this.level.boss} colpito ${this.bossHits}/3: protesta in dialetto dei rovi!`); if (this.bossHits >= 3) this.win(); } else this.loseLife(`${this.level.boss} ti ha timbrato il cartellino al contrario!`);
+    if (player.body.velocity.y > 80 && player.y < boss.y - 12) {
+      this.bossHits += 1;
+      player.setVelocityY(-310);
+      run.score += 50;
+      this.scoreText.setText(`Punti: ${run.score}`);
+      if (this.bossHits >= 3) {
+        boss.disableBody(true, true);
+        this.infoText.setText(`${this.level.boss} sconfitto! Bonus conquistato, ora raccogli il resto.`);
+        return;
+      }
+      this.infoText.setText(`${this.level.boss} colpito ${this.bossHits}/3: bonus facoltativo in arrivo!`);
+      return;
+    }
+    this.loseLife(`${this.level.boss} ti ha timbrato il cartellino al contrario!`);
   }
-  loseLife(message = 'Ionel inciampa ma salva la dignità con un salto comico.') { if (this.invulnerable || this.ended) return; run.lives -= 1; this.livesText.setText(`Vite: ${run.lives}`); if (run.lives <= 0) { this.finish('Game Over', message, false); return; } this.invulnerable = true; this.infoText.setText(message); this.player.setPosition(Math.max(85, this.player.x - 180), 250); this.player.setVelocity(0,0); this.tweens.add({ targets: this.player, alpha: .35, yoyo: true, repeat: 7, duration: 110, onComplete: () => { this.player.setAlpha(1); this.invulnerable = false; } }); }
+  loseLife(message = 'Ionel inciampa ma salva la dignità con un salto comico.') {
+    if (this.invulnerable || this.ended) return;
+    const isFall = message.includes('caduto nel buco');
+    this.invulnerable = true;
+    run.lives -= 1;
+    this.livesText.setText(`Vite: ${run.lives}`);
+    if (run.lives <= 0) { this.finish('Game Over', message, false); return; }
+    this.infoText.setText(message);
+
+    const respawnPlayer = () => {
+      this.player.setPosition(Math.max(85, this.player.x - 180), 250);
+      this.player.setVelocity(0,0);
+      this.player.setAngle(0);
+      this.tweens.add({ targets: this.player, alpha: .35, yoyo: true, repeat: 7, duration: 110, onComplete: () => { this.player.setAlpha(1); this.invulnerable = false; } });
+    };
+
+    if (isFall) {
+      const patatrac = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 70, 'PATATRAC!', titleStyle(42)).setOrigin(.5).setScrollFactor(0).setDepth(1000);
+      this.tweens.add({ targets: patatrac, scale: 1.18, angle: -5, alpha: .15, yoyo: true, duration: 260, onComplete: () => patatrac.destroy() });
+      this.player.setVelocity(0, -220);
+      this.tweens.add({ targets: this.player, angle: 18, y: this.player.y - 40, yoyo: true, duration: 220, onComplete: respawnPlayer });
+      return;
+    }
+
+    respawnPlayer();
+  }
   win() { save.complete(this.level.id, run.score); this.finish('Vittoria!', this.level.victory, true); }
   finish(title, message, won) { this.ended = true; this.physics.pause(); this.add.rectangle(GAME_WIDTH/2, GAME_HEIGHT/2, 650, 250, 0x08111f, .92).setScrollFactor(0).setStrokeStyle(4, won ? 0xfff4a8 : 0xff6b6b); this.add.text(480, 210, title, titleStyle(44)).setOrigin(.5).setScrollFactor(0); this.add.text(480, 268, message, textStyle(20, '#ffffff')).setOrigin(.5).setScrollFactor(0).setWordWrapWidth(570).setAlign('center'); this.add.text(480, 334, `Punteggio: ${run.score} • Premi Invio per la selezione livelli`, textStyle(18, '#7de6ff')).setOrigin(.5).setScrollFactor(0); }
 }
