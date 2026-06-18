@@ -136,9 +136,9 @@ class GameScene extends Phaser.Scene {
   }
   update() {
     if (this.ended) { if (Phaser.Input.Keyboard.JustDown(this.enterKey)) this.scene.start('LevelSelectScene'); return; }
-    const left = this.cursors.left.isDown || this.wasd.A.isDown; const right = this.cursors.right.isDown || this.wasd.D.isDown;
+    const left = this.cursors.left.isDown || this.wasd.A.isDown || this.touchLeft; const right = this.cursors.right.isDown || this.wasd.D.isDown || this.touchRight;
     this.player.setVelocityX(left ? -230 : right ? 230 : 0); if (left || right) this.player.setFlipX(left);
-    if ((Phaser.Input.Keyboard.JustDown(this.cursors.up) || Phaser.Input.Keyboard.JustDown(this.cursors.space) || Phaser.Input.Keyboard.JustDown(this.wasd.W)) && this.player.body.blocked.down) this.player.setVelocityY(-470);
+    if ((Phaser.Input.Keyboard.JustDown(this.cursors.up) || Phaser.Input.Keyboard.JustDown(this.cursors.space) || Phaser.Input.Keyboard.JustDown(this.wasd.W) || this.touchJump) && this.player.body.blocked.down) this.player.setVelocityY(-470);
     this.hazards.children.iterate((h) => { if (!h) return; if (h.body.blocked.left) h.setVelocityX(90); if (h.body.blocked.right) h.setVelocityX(-90); });
     if (this.player.y > GAME_HEIGHT + 80) this.loseLife();
   }
@@ -168,7 +168,21 @@ class GameScene extends Phaser.Scene {
     this.infoText = this.add.text(480, 40, `Missione: ${this.level.mission}`, textStyle(15, '#e7ffe4')).setOrigin(.5,0).setScrollFactor(0).setWordWrapWidth(700).setAlign('center');
     this.add.text(480, 72, this.level.joke, textStyle(14, '#fff4a8')).setOrigin(.5,0).setScrollFactor(0).setWordWrapWidth(760).setAlign('center');
   }
-  createControls() { this.cursors = this.input.keyboard.createCursorKeys(); this.wasd = this.input.keyboard.addKeys('W,A,S,D'); this.enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER); }
+  createControls() {
+    this.cursors = this.input.keyboard.createCursorKeys(); this.wasd = this.input.keyboard.addKeys('W,A,S,D'); this.enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+    this.touchLeft = false; this.touchRight = false; this.touchJump = false;
+    this.addTouchButton(78, 462, '◀', (pressed) => { this.touchLeft = pressed; });
+    this.addTouchButton(168, 462, '▶', (pressed) => { this.touchRight = pressed; });
+    this.addTouchButton(866, 448, '⤒', (pressed) => { this.touchJump = pressed; }, 82);
+  }
+  addTouchButton(x, y, label, setPressed, size = 72) {
+    const rect = this.add.rectangle(x, y, size, size, 0x08111f, .48).setScrollFactor(0).setStrokeStyle(3, 0xffffff, .65).setInteractive({ useHandCursor: true });
+    const text = this.add.text(x, y, label, textStyle(38, '#ffffff')).setOrigin(.5).setScrollFactor(0);
+    rect.on('pointerdown', () => setPressed(true));
+    rect.on('pointerup', () => setPressed(false));
+    rect.on('pointerout', () => setPressed(false));
+    return { rect, text };
+  }
   createCollisions() {
     this.physics.add.collider(this.player, this.platforms); this.physics.add.collider(this.hazards, this.platforms); this.physics.add.collider(this.boss, this.platforms);
     this.physics.add.overlap(this.player, this.items, this.collectItem, null, this); this.physics.add.overlap(this.player, this.hazards, this.hitHazard, null, this); this.physics.add.overlap(this.player, this.boss, this.hitBoss, null, this);
@@ -181,7 +195,15 @@ class GameScene extends Phaser.Scene {
   }
   loseLife(message = 'Ionel inciampa ma salva la dignità con un salto comico.') { if (this.invulnerable || this.ended) return; run.lives -= 1; this.livesText.setText(`Vite: ${run.lives}`); if (run.lives <= 0) { this.finish('Game Over', message, false); return; } this.invulnerable = true; this.infoText.setText(message); this.player.setPosition(Math.max(85, this.player.x - 180), 250); this.player.setVelocity(0,0); this.tweens.add({ targets: this.player, alpha: .35, yoyo: true, repeat: 7, duration: 110, onComplete: () => { this.player.setAlpha(1); this.invulnerable = false; } }); }
   win() { save.complete(this.level.id, run.score); this.finish('Vittoria!', this.level.victory, true); }
-  finish(title, message, won) { this.ended = true; this.physics.pause(); this.add.rectangle(GAME_WIDTH/2, GAME_HEIGHT/2, 650, 250, 0x08111f, .92).setScrollFactor(0).setStrokeStyle(4, won ? 0xfff4a8 : 0xff6b6b); this.add.text(480, 210, title, titleStyle(44)).setOrigin(.5).setScrollFactor(0); this.add.text(480, 268, message, textStyle(20, '#ffffff')).setOrigin(.5).setScrollFactor(0).setWordWrapWidth(570).setAlign('center'); this.add.text(480, 334, `Punteggio: ${run.score} • Premi Invio per la selezione livelli`, textStyle(18, '#7de6ff')).setOrigin(.5).setScrollFactor(0); }
+  finish(title, message, won) {
+    this.ended = true; this.touchLeft = false; this.touchRight = false; this.touchJump = false; this.physics.pause();
+    this.add.rectangle(GAME_WIDTH/2, GAME_HEIGHT/2, 650, 290, 0x08111f, .92).setScrollFactor(0).setStrokeStyle(4, won ? 0xfff4a8 : 0xff6b6b);
+    this.add.text(480, 190, title, titleStyle(44)).setOrigin(.5).setScrollFactor(0);
+    this.add.text(480, 248, message, textStyle(20, '#ffffff')).setOrigin(.5).setScrollFactor(0).setWordWrapWidth(570).setAlign('center');
+    this.add.text(480, 310, `Punteggio: ${run.score} • Premi Invio per la selezione livelli`, textStyle(18, '#7de6ff')).setOrigin(.5).setScrollFactor(0);
+    const back = addButton(this, 480, 372, 330, '↩ Selezione livelli', () => this.scene.start('LevelSelectScene'));
+    back.rect.setScrollFactor(0); back.text.setScrollFactor(0);
+  }
 }
 
 function createTextures(scene) {
