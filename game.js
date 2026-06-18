@@ -136,9 +136,9 @@ class GameScene extends Phaser.Scene {
   }
   update() {
     if (this.ended) { if (Phaser.Input.Keyboard.JustDown(this.enterKey)) this.scene.start('LevelSelectScene'); return; }
-    const left = this.cursors.left.isDown || this.wasd.A.isDown; const right = this.cursors.right.isDown || this.wasd.D.isDown;
+    const left = this.cursors.left.isDown || this.wasd.A.isDown || this.touchLeft; const right = this.cursors.right.isDown || this.wasd.D.isDown || this.touchRight;
     this.player.setVelocityX(left ? -230 : right ? 230 : 0); if (left || right) this.player.setFlipX(left);
-    if ((Phaser.Input.Keyboard.JustDown(this.cursors.up) || Phaser.Input.Keyboard.JustDown(this.cursors.space) || Phaser.Input.Keyboard.JustDown(this.wasd.W)) && this.player.body.blocked.down) this.player.setVelocityY(-470);
+    if ((Phaser.Input.Keyboard.JustDown(this.cursors.up) || Phaser.Input.Keyboard.JustDown(this.cursors.space) || Phaser.Input.Keyboard.JustDown(this.wasd.W) || this.touchJump) && this.player.body.blocked.down) this.player.setVelocityY(-470);
     this.hazards.children.iterate((h) => { if (!h) return; if (h.body.blocked.left) h.setVelocityX(90); if (h.body.blocked.right) h.setVelocityX(-90); });
     if (this.player.y > GAME_HEIGHT + 80) this.loseLife();
   }
@@ -168,7 +168,21 @@ class GameScene extends Phaser.Scene {
     this.infoText = this.add.text(480, 40, `Missione: ${this.level.mission}`, textStyle(15, '#e7ffe4')).setOrigin(.5,0).setScrollFactor(0).setWordWrapWidth(700).setAlign('center');
     this.add.text(480, 72, this.level.joke, textStyle(14, '#fff4a8')).setOrigin(.5,0).setScrollFactor(0).setWordWrapWidth(760).setAlign('center');
   }
-  createControls() { this.cursors = this.input.keyboard.createCursorKeys(); this.wasd = this.input.keyboard.addKeys('W,A,S,D'); this.enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER); }
+  createControls() {
+    this.cursors = this.input.keyboard.createCursorKeys(); this.wasd = this.input.keyboard.addKeys('W,A,S,D'); this.enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+    this.touchLeft = false; this.touchRight = false; this.touchJump = false;
+    this.addTouchButton(78, 462, '◀', (pressed) => { this.touchLeft = pressed; });
+    this.addTouchButton(168, 462, '▶', (pressed) => { this.touchRight = pressed; });
+    this.addTouchButton(866, 448, '⤒', (pressed) => { this.touchJump = pressed; }, 82);
+  }
+  addTouchButton(x, y, label, setPressed, size = 72) {
+    const rect = this.add.rectangle(x, y, size, size, 0x08111f, .48).setScrollFactor(0).setStrokeStyle(3, 0xffffff, .65).setInteractive({ useHandCursor: true });
+    const text = this.add.text(x, y, label, textStyle(38, '#ffffff')).setOrigin(.5).setScrollFactor(0);
+    rect.on('pointerdown', () => setPressed(true));
+    rect.on('pointerup', () => setPressed(false));
+    rect.on('pointerout', () => setPressed(false));
+    return { rect, text };
+  }
   createCollisions() {
     this.physics.add.collider(this.player, this.platforms); this.physics.add.collider(this.hazards, this.platforms); this.physics.add.collider(this.boss, this.platforms);
     this.physics.add.overlap(this.player, this.items, this.collectItem, null, this); this.physics.add.overlap(this.player, this.hazards, this.hitHazard, null, this); this.physics.add.overlap(this.player, this.boss, this.hitBoss, null, this);
